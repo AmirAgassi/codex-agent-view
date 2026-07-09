@@ -145,6 +145,21 @@ describe("CodexClient", () => {
     client.close();
   });
 
+  it("unsubscribes the persistent dashboard connection from a thread", async () => {
+    const { client, transport } = connectedHarness();
+    await client.connect();
+
+    const unsubscribe = client.unsubscribeThread("thread-1");
+    const sent = transport.writes.at(-1)!;
+    expect(sent).toMatchObject({
+      method: "thread/unsubscribe",
+      params: { threadId: "thread-1" },
+    });
+    transport.send({ id: sent.id, result: { status: "unsubscribed" } });
+    await expect(unsubscribe).resolves.toEqual({ status: "unsubscribed" });
+    client.close();
+  });
+
   it("emits notifications and server-initiated requests", async () => {
     const { client, transport } = connectedHarness();
     await client.connect();

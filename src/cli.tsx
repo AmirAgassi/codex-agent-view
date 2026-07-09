@@ -4,15 +4,65 @@ import { render, type Instance } from "ink";
 
 import { AgentViewApp, type AppOutcome } from "./app.js";
 import { HELP_TEXT, VERSION, parseCliOptions, type CliOptions } from "./cli-options.js";
-import { attachToThread, CodexClient, detectCodexVersion } from "./codex/index.js";
+import {
+  CodexClient,
+  detectCodexVersion,
+  restoreTerminal,
+  WarmNativeTuiManager,
+} from "./codex/index.js";
 import { loadPreferences } from "./state/preferences.js";
+
+const SHUTDOWN_SIGNALS = ["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"] as const;
+const SHUTDOWN_SIGNAL_NUMBERS: Record<(typeof SHUTDOWN_SIGNALS)[number], number> = {
+  SIGHUP: 1,
+  SIGINT: 2,
+  SIGQUIT: 3,
+  SIGTERM: 15,
+};
+
+function installSignalCleanup(
+  client: CodexClient,
+  nativeTuis: WarmNativeTuiManager,
+): () => void {
+  const handlers = new Map<NodeJS.Signals, () => void>();
+  let handling = false;
+  const removeHandlers = (): void => {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  };
+  const terminate = (signal: (typeof SHUTDOWN_SIGNALS)[number]): void => {
+    removeHandlers();
+    restoreTerminal();
+    try {
+      process.kill(process.pid, signal);
+    } catch {
+      process.exit(128 + SHUTDOWN_SIGNAL_NUMBERS[signal]);
+    }
+  };
+
+  for (const signal of SHUTDOWN_SIGNALS) {
+    const handler = (): void => {
+      if (handling) return;
+      handling = true;
+      client.close();
+      const fallback = setTimeout(() => terminate(signal), 1_500);
+      void nativeTuis.dispose().finally(() => {
+        clearTimeout(fallback);
+        terminate(signal);
+      });
+    };
+    handlers.set(signal, handler);
+    process.on(signal, handler);
+  }
+  return removeHandlers;
+}
 
 async function runDashboard(
   options: CliOptions,
   codexVersion: string,
+  client: CodexClient,
+  nativeTuis: WarmNativeTuiManager,
 ): Promise<AppOutcome> {
   const preferences = await loadPreferences();
-  const client = new CodexClient({ cwd: options.cwd });
 
   let instance: Instance | undefined;
   let outcome: AppOutcome = { type: "exit" };
@@ -25,25 +75,28 @@ async function runDashboard(
   };
 
   instance = render(
-      <AgentViewApp
-        client={client}
-        options={options}
-        initialPreferences={preferences}
-        codexVersion={codexVersion}
-        onDone={onDone}
-      />,
-      {
-        exitOnCtrlC: false,
-        patchConsole: false,
-        alternateScreen: true,
-      },
+    <AgentViewApp
+      client={client}
+      options={options}
+      initialPreferences={preferences}
+      codexVersion={codexVersion}
+      onDone={onDone}
+      onWarmThreads={(targets) => {
+        void nativeTuis.prewarm(targets);
+      }}
+    />,
+    {
+      exitOnCtrlC: false,
+      patchConsole: false,
+      alternateScreen: true,
+    },
   );
 
   try {
     await instance.waitUntilExit();
     return outcome;
   } finally {
-    client.close();
+    instance.unmount();
   }
 }
 
@@ -70,25 +123,36 @@ async function main(): Promise<void> {
   }
 
   const codexVersion = await detectCodexVersion();
-  let running = true;
-  while (running) {
-    const outcome = await runDashboard(options, codexVersion);
+  const client = new CodexClient({ cwd: options.cwd });
+  const nativeTuis = new WarmNativeTuiManager();
+  const removeSignalHandlers = installSignalCleanup(client, nativeTuis);
+  try {
+    let running = true;
+    while (running) {
+      const outcome = await runDashboard(options, codexVersion, client, nativeTuis);
 
-    if (outcome.type === "exit") {
-      running = false;
-      continue;
-    }
-
-    try {
-      const exitCode = await attachToThread(outcome.threadId, { cwd: outcome.cwd });
-      if (exitCode !== 0) {
-        process.stderr.write(`Codex attach exited with status ${exitCode}\n`);
+      if (outcome.type === "exit") {
+        running = false;
+        continue;
       }
-    } catch (error) {
-      process.stderr.write(
-        `Could not open native Codex: ${error instanceof Error ? error.message : String(error)}\n`,
-      );
+
+      try {
+        const result = await nativeTuis.attach(outcome.threadId, { cwd: outcome.cwd });
+        if (result.exitCode !== 0) {
+          process.stderr.write(`Codex attach exited with status ${result.exitCode}\n`);
+        }
+      } catch (error) {
+        process.stderr.write(
+          `Could not open native Codex: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+      } finally {
+        void client.unsubscribeThread(outcome.threadId).catch(() => undefined);
+      }
     }
+  } finally {
+    removeSignalHandlers();
+    client.close();
+    await nativeTuis.dispose();
   }
 }
 

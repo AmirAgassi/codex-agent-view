@@ -24,6 +24,10 @@ const TERMINAL_RESET = [
   "\u001b[?1049l",
 ].join("");
 
+export function restoreTerminal(): void {
+  process.stdout.write(TERMINAL_RESET);
+}
+
 const FORWARDED_SIGNALS = ["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"] as const;
 const SIGNAL_NUMBERS: Record<(typeof FORWARDED_SIGNALS)[number], number> = {
   SIGHUP: 1,
@@ -234,7 +238,7 @@ export async function attachToThread(
     const signalHandlers = new Map<NodeJS.Signals, () => void>();
 
     const resetTerminal = (): void => {
-      stdout.write(TERMINAL_RESET);
+      restoreTerminal();
     };
 
     const cleanup = (): void => {

@@ -10,6 +10,7 @@ pending approvals are replayed when it reconnects.
 - Live turn, tool, plan, diff, output, and status events
 - Dispatch from the dashboard with isolated Git worktrees by default
 - Enter the installed native Codex TUI with its complete history, slash commands, attachments, modes, approvals, and future features intact
+- Preload active or pinned native chats and retain up to three warm TUIs so MCP servers initialize once
 - Detach from a native chat while its turn keeps running, then open or manage another session
 - Resume idle/cold sessions before following up, or steer an active turn in place
 - Answer `request_user_input` questions and command, file, or permission approvals
@@ -23,6 +24,7 @@ pending approvals are replayed when it reconnects.
 - Node.js 22 or newer
 - Codex CLI with `codex app-server daemon` support (developed against `0.144.0`)
 - An existing Codex login
+- tmux for warm native-chat switching (optional; the transparent PTY fallback still works without it)
 
 ## Install
 
@@ -70,10 +72,16 @@ Run `codex-agents --help` for model, approval, sandbox, and direct-checkout opti
 | `?` | Show all shortcuts |
 | `q` / `Ctrl+C` | Exit the dashboard; agents keep running |
 
-Once attached, the child process is the regular Codex TUI—not a reimplementation. All native
-keyboard behavior remains unchanged. Press `Shift+←` or `Ctrl+B` to detach its UI connection and
-return to Agent View without interrupting the daemon-owned turn. Plain `←` remains Codex's normal
-cursor key. Codex's own `Ctrl+C`, `/quit`, and `/exit` behavior is passed through unchanged.
+Once attached, the child process is the regular Codex TUI—not a reimplementation. With tmux
+available, Agent View parks that exact TUI on detach, including its screen, draft, modal, scroll
+position, MCP connections, and App Server subscription. Reopening it attaches to the existing
+process instead of running `codex resume` again. Agent View preloads active or pinned sessions,
+warms other chats on their first open, and evicts older detached clients at a three-TUI cap.
+
+Press `Shift+←` or `Ctrl+B` to return to Agent View without interrupting the daemon-owned turn.
+Apart from these dedicated detach shortcuts, native keyboard behavior is unchanged. Plain `←`
+remains Codex's normal cursor key, and Codex's own `Ctrl+C`, `/quit`, and `/exit` behavior passes
+through unchanged. Exiting Agent View cleans up the warm TUI clients; daemon-owned agents continue.
 
 ## Worktrees
 
@@ -109,8 +117,10 @@ Ink terminal UI
      -> WebSocket over `codex app-server proxy`
         -> persistent `codex app-server daemon`
            -> Codex threads and turns
-  -> transparent PTY handoff
-     -> official `codex resume --remote unix:// <thread>` TUI
+  -> native terminal handoff
+     -> private bounded tmux pool
+        -> warm official `codex resume --remote unix:// <thread>` TUIs
+     -> transparent node-pty fallback when tmux is unavailable
 ```
 
 The dashboard reconnects with `thread/resume`, which restores event subscriptions and replays

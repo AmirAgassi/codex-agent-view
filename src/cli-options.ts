@@ -112,5 +112,6 @@ Options:
   -V, --version          Show version
 
 New sessions use isolated Git worktrees by default. Use --direct when a task
-must operate in the current checkout. Enter or → opens the native Codex TUI;
-Shift+← or Ctrl+B detaches it while the daemon-owned turn keeps running.`;
+must operate in the current checkout. Enter or → opens a warm native Codex TUI;
+Shift+← or Ctrl+B parks it while the daemon-owned turn keeps running. tmux is
+used when available, with a transparent PTY fallback.`;

@@ -6,6 +6,7 @@ import {
   CodexClient,
   prepareWorkspace,
   type ThreadListParams,
+  type WarmThreadTarget,
 } from "./codex/index.js";
 import {
   createInitialDashboardState,
@@ -50,7 +51,10 @@ export interface AgentViewAppProps {
   initialPreferences: Preferences;
   codexVersion: string;
   onDone: (outcome: AppOutcome) => void;
+  onWarmThreads?: (targets: WarmThreadTarget[]) => void;
 }
+
+const PREWARM_SESSION_LIMIT = 3;
 
 function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -115,6 +119,7 @@ export function AgentViewApp({
   initialPreferences,
   codexVersion,
   onDone,
+  onWarmThreads,
 }: AgentViewAppProps): React.JSX.Element {
   const [state, dispatch] = useReducer(
     dashboardReducer,
@@ -140,6 +145,8 @@ export function AgentViewApp({
   const reconnectLoopRef = useRef<ReconnectLoop | undefined>(undefined);
   const resolvingRequestIds = useRef(new Set<string>());
   const preferenceSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const attachPending = useRef(false);
+  const retainedAttachThreadId = useRef<string | undefined>(undefined);
   const finished = useRef(false);
   stateRef.current = state;
   preferencesRef.current = preferences;
@@ -220,6 +227,24 @@ export function AgentViewApp({
       );
       const visibleIds = new Set(visible.map((thread) => thread.id));
       dispatch({ type: "thread/list", threads: visible });
+      if (onWarmThreads) {
+        const pinnedIds = new Set(preferencesRef.current.pinnedThreadIds);
+        const warmTargets = visible
+          .map((thread, index) => ({
+            thread,
+            index,
+            priority: (thread.status.type === "active" ? 2 : 0) +
+              (pinnedIds.has(thread.id) ? 1 : 0),
+          }))
+          .filter(({ priority }) => priority > 0)
+          .sort((left, right) => right.priority - left.priority || left.index - right.index)
+          .slice(0, PREWARM_SESSION_LIMIT)
+          .map(({ thread }) => ({
+            threadId: thread.id,
+            cwd: registry.registrations[thread.id]?.taskCwd ?? thread.cwd ?? options.cwd,
+          }));
+        onWarmThreads(warmTargets);
+      }
       for (const threadId of previousIds) {
         if (!visibleIds.has(threadId)) dispatch({ type: "thread/delete", threadId });
       }
@@ -291,7 +316,7 @@ export function AgentViewApp({
     } finally {
       endOperation(operation);
     }
-  }, [beginOperation, client, endOperation, ensureClientConnected, options]);
+  }, [beginOperation, client, endOperation, ensureClientConnected, onWarmThreads, options]);
 
   useEffect(() => {
     const reconnectLoop = createReconnectLoop({
@@ -401,7 +426,11 @@ export function AgentViewApp({
       client.off("protocolError", onError);
       client.off("error", onError);
       client.off("disconnect", onDisconnect);
-      client.close();
+      for (const threadId of subscribedThreadIds.current) {
+        if (threadId === retainedAttachThreadId.current) continue;
+        void client.unsubscribeThread(threadId).catch(() => undefined);
+      }
+      subscribedThreadIds.current.clear();
     };
   }, [client, options.model, refresh]);
 
@@ -639,10 +668,18 @@ export function AgentViewApp({
 
   const handleAttach = useCallback(
     (threadId: string): void => {
-      const cwd = stateRef.current.sessions[threadId]?.thread.cwd ?? options.cwd;
-      finish({ type: "attach", threadId, cwd });
+      if (attachPending.current || finished.current) return;
+      attachPending.current = true;
+      retainedAttachThreadId.current = threadId;
+      const cwd = registryRef.current.registrations[threadId]?.taskCwd ??
+        stateRef.current.sessions[threadId]?.thread.cwd ?? options.cwd;
+      setStatusMessage({ kind: "info", text: "Opening warm native Codex…" });
+      void ensureClientConnected()
+        .then(() => ensureThreadSubscribed(threadId))
+        .catch(() => undefined)
+        .finally(() => finish({ type: "attach", threadId, cwd }));
     },
-    [finish, options.cwd],
+    [ensureClientConnected, ensureThreadSubscribed, finish, options.cwd],
   );
 
   return (

@@ -5,7 +5,7 @@ const SHORTCUTS: ReadonlyArray<readonly [string, string]> = [
   ["j / ↓", "next session"],
   ["k / ↑", "previous session"],
   ["→ / enter", "open native Codex chat"],
-  ["shift+← / ^B", "detach chat; keep it running"],
+  ["shift+← / ^B", "park native chat; keep it warm"],
   ["v", "peek at selected session"],
   ["n", "dispatch a new task"],
   ["space", "reply or answer input"],

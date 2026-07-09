@@ -456,6 +456,12 @@ export class CodexClient extends EventEmitter<CodexClientEvents> {
     return this.request("thread/resume", { threadId, ...options });
   }
 
+  unsubscribeThread(
+    threadId: string,
+  ): Promise<{ status: "unsubscribed" | "notSubscribed" | "notLoaded" }> {
+    return this.request("thread/unsubscribe", { threadId });
+  }
+
   startThread(params: ThreadStartParams = {}): Promise<ThreadSessionResult> {
     return this.request("thread/start", params);
   }
