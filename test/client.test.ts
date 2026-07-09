@@ -114,7 +114,7 @@ describe("CodexClient", () => {
       method: "initialize",
       id: 1,
       params: {
-        clientInfo: { name: "codex_agent_view", title: "Codex Agent View", version: "0.1.0" },
+        clientInfo: { name: "codex_agent_view", title: "Codex Agents View", version: "0.1.0" },
         capabilities: { experimentalApi: true, requestAttestation: false },
       },
     });

@@ -55,6 +55,6 @@ export function buildServerRequestResponse(
   return {
     type: "error",
     code: -32_000,
-    message: `Unsupported request declined by Codex Agent View: ${request.method}`,
+    message: `Unsupported request declined by Codex Agents View: ${request.method}`,
   };
 }

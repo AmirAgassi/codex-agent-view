@@ -101,7 +101,7 @@ export function Dashboard({
   state,
   preferences,
   initialSelectedThreadId,
-  title = "Codex Agent View",
+  title = "Codex Agents View",
   version,
   model,
   cwd,

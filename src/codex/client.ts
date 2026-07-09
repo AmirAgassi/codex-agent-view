@@ -202,7 +202,7 @@ export class CodexClient extends EventEmitter<CodexClientEvents> {
 
     const clientInfo: ClientInfo = {
       name: this.#options.clientInfo?.name ?? "codex_agent_view",
-      title: this.#options.clientInfo?.title ?? "Codex Agent View",
+      title: this.#options.clientInfo?.title ?? "Codex Agents View",
       version: this.#options.clientInfo?.version ?? "0.1.0",
     };
     const capabilities = this.#options.capabilities === null

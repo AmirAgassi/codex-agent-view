@@ -1,4 +1,4 @@
-# Codex Agent View
+# Codex Agents View
 
 This was a 4-shot slop project I made for Codex to replicate Claude Code's agents view (see https://code.claude.com/docs/en/agent-view) and better utilize my new Codex plan at work after 5.6 Sol dropped. I'm pretty happy with how it turned out, all things considered.
 
@@ -56,7 +56,7 @@ codex-agents --all
 ```
 
 Run `codex-agents --help` for model, approval, sandbox, and direct-checkout options.
-Agent View starts the managed local App Server daemon automatically.
+Agents View starts the managed local App Server daemon automatically.
 
 ## Keyboard shortcuts
 
@@ -80,15 +80,15 @@ Agent View starts the managed local App Server daemon automatically.
 | `q` / `Ctrl+C` | Exit the dashboard; agents keep running |
 
 Once attached, the child process is the regular Codex TUI—not a reimplementation. With tmux
-available, Agent View parks that exact TUI on detach, including its screen, draft, modal, scroll
+available, Agents View parks that exact TUI on detach, including its screen, draft, modal, scroll
 position, MCP connections, and App Server subscription. Reopening it attaches to the existing
-process instead of running `codex resume` again. Agent View preloads active or pinned sessions,
+process instead of running `codex resume` again. Agents View preloads active or pinned sessions,
 warms other chats on their first open, and evicts older detached clients at a three-TUI cap.
 
-Press `Shift+←` or `Ctrl+B` to return to Agent View without interrupting the daemon-owned turn.
+Press `Shift+←` or `Ctrl+B` to return to Agents View without interrupting the daemon-owned turn.
 Apart from these dedicated detach shortcuts, native keyboard behavior is unchanged. Plain `←`
 remains Codex's normal cursor key, and Codex's own `Ctrl+C`, `/quit`, and `/exit` behavior passes
-through unchanged. Exiting Agent View cleans up the warm TUI clients; daemon-owned agents continue.
+through unchanged. Exiting Agents View cleans up the warm TUI clients; daemon-owned agents continue.
 
 ## Worktrees
 
@@ -106,7 +106,7 @@ from the source repository with `git worktree remove <path>`.
 
 ## Local state
 
-Codex Agent View stores only its own metadata:
+Codex Agents View stores only its own metadata:
 
 ```text
 ~/.codex/agent-view/preferences.json  # pins and ordering

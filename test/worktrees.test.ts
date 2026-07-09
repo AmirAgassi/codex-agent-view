@@ -50,7 +50,7 @@ describe("prepareWorkspace", () => {
       "-C",
       source,
       "-c",
-      "user.name=Codex Agent View",
+      "user.name=Codex Agents View",
       "-c",
       "user.email=agent-view@example.invalid",
       "commit",
