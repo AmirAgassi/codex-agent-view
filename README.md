@@ -34,8 +34,8 @@ This is an unofficial community project and is not affiliated with or endorsed b
 ## Install
 
 ```bash
-git clone https://github.com/AmirAgassi/codex-agent-view.git
-cd codex-agent-view
+git clone https://github.com/AmirAgassi/codex-agents-view.git
+cd codex-agents-view
 npm install
 npm run build
 npm link
