@@ -1,0 +1,132 @@
+# Codex Agent View
+
+A keyboard-first terminal dashboard for persistent Codex sessions that opens every chat in the native Codex TUI.
+It uses [Codex App Server](https://developers.openai.com/codex/app-server) directly, so sessions continue while the dashboard is closed and
+pending approvals are replayed when it reconnects.
+
+## What works
+
+- Sessions grouped into pinned, awaiting input, working, and completed
+- Live turn, tool, plan, diff, output, and status events
+- Dispatch from the dashboard with isolated Git worktrees by default
+- Enter the installed native Codex TUI with its complete history, slash commands, attachments, modes, approvals, and future features intact
+- Detach from a native chat while its turn keeps running, then open or manage another session
+- Resume idle/cold sessions before following up, or steer an active turn in place
+- Answer `request_user_input` questions and command, file, or permission approvals
+- Interrupt, rename, pin, archive, refresh, and reopen sessions
+- Attach to the native Codex TUI and return to the dashboard when it exits
+- Current-project and all-project views with bounded rendering for large histories
+
+## Requirements
+
+- macOS or Linux
+- Node.js 22 or newer
+- Codex CLI with `codex app-server daemon` support (developed against `0.144.0`)
+- An existing Codex login
+
+## Install
+
+```bash
+cd ~/Desktop/codex-agent-view
+npm install
+npm run build
+npm link
+```
+
+Then open the dashboard for the current project:
+
+```bash
+cd /path/to/project
+codex-agents
+```
+
+Or choose the project explicitly:
+
+```bash
+codex-agents -C /path/to/project
+codex-agents --all
+```
+
+Run `codex-agents --help` for model, approval, sandbox, and direct-checkout options.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `↑` / `↓` | Move between sessions |
+| `→` / `Enter` | Open the session in the native Codex TUI |
+| `Shift+←` / `Ctrl+B` | Detach from the native chat and return (used inside Codex) |
+| `v` | Peek at recent activity |
+| `n` | Dispatch a new session |
+| `Space` | Reply or answer a pending question |
+| `a` / `s` | Allow once / allow for the session |
+| `d` / `c` | Decline / cancel a request |
+| `x` | Interrupt the active turn |
+| `e` | Rename the session |
+| `z` | Archive the session |
+| `p` | Pin or unpin the session |
+| `o` | Open the session in native Codex |
+| `r` | Refresh |
+| `?` | Show all shortcuts |
+| `q` / `Ctrl+C` | Exit the dashboard; agents keep running |
+
+Once attached, the child process is the regular Codex TUI—not a reimplementation. All native
+keyboard behavior remains unchanged. Press `Shift+←` or `Ctrl+B` to detach its UI connection and
+return to Agent View without interrupting the daemon-owned turn. Plain `←` remains Codex's normal
+cursor key. Codex's own `Ctrl+C`, `/quit`, and `/exit` behavior is passed through unchanged.
+
+## Worktrees
+
+New tasks in Git repositories start from committed `HEAD` in detached worktrees under:
+
+```text
+~/.codex/agent-view/worktrees/<repository>/<task>-<id>
+```
+
+This prevents concurrent sessions from editing the same checkout. Uncommitted changes in the source
+checkout are intentionally not copied. Use `--direct` when a task must work in the current checkout.
+
+Worktrees are not deleted automatically. After preserving or discarding their changes, remove them
+from the source repository with `git worktree remove <path>`.
+
+## Local state
+
+Codex Agent View stores only its own metadata:
+
+```text
+~/.codex/agent-view/preferences.json  # pins and ordering
+~/.codex/agent-view/workspaces/      # concurrency-safe per-thread worktree mappings
+```
+
+It never writes Codex's SQLite database or rollout files directly. Conversation history and live
+events come through the App Server protocol.
+
+## Architecture
+
+```text
+Ink terminal UI
+  -> Codex JSON-RPC client
+     -> WebSocket over `codex app-server proxy`
+        -> persistent `codex app-server daemon`
+           -> Codex threads and turns
+  -> transparent PTY handoff
+     -> official `codex resume --remote unix:// <thread>` TUI
+```
+
+The dashboard reconnects with `thread/resume`, which restores event subscriptions and replays
+pending approval/input requests. A daemon process crash cannot restore an in-flight turn; persisted
+conversation history remains resumable.
+
+## Development
+
+```bash
+npm run dev -- -C /path/to/project
+npm run typecheck
+npm test
+npm run build
+npm run smoke
+npm run check
+```
+
+The protocol surface is experimental and can change between Codex releases. Run the test suite and
+the real-daemon smoke test after upgrading Codex.

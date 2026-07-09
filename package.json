@@ -1,0 +1,36 @@
+{
+  "name": "codex-agent-view",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A keyboard-first terminal dashboard that opens sessions in the native Codex TUI.",
+  "type": "module",
+  "bin": {
+    "codex-agents": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "dev": "tsx src/cli.tsx",
+    "start": "node dist/cli.js",
+    "smoke": "node dist/smoke.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "ink": "^7.1.0",
+    "node-pty": "^1.1.0",
+    "react": "^19.2.7",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
