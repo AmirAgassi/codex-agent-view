@@ -1,10 +1,11 @@
 # Codex Agent View
 
+This was a 4-shot slop project I made for Codex to replicate Claude Code's agents view (see https://code.claude.com/docs/en/agent-view) and better utilize my new Codex plan at work after 5.6 Sol dropped. I'm pretty happy with how it turned out, all things considered.
+
 A keyboard-first terminal dashboard for persistent Codex sessions that opens every chat in the native Codex TUI.
 It uses [Codex App Server](https://developers.openai.com/codex/app-server) directly, so sessions continue while the dashboard is closed and
 pending approvals are replayed when it reconnects.
 
-> "This was a 4-shot slop project I made for Codex to replicate Claude Code's agents view (see https://code.claude.com/docs/en/agent-view) and better utilize my new Codex plan at work after 5.6 Sol dropped. I'm pretty happy with how it turned out, all things considered."
 
 This is an unofficial community project and is not affiliated with or endorsed by OpenAI or Anthropic.
 
