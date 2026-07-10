@@ -58,6 +58,7 @@ export interface CodexThread {
   cwd: string;
   cliVersion?: string;
   source?: unknown;
+  threadSource?: string | null;
   agentNickname?: string | null;
   agentRole?: string | null;
   gitInfo?: GitInfo | null;

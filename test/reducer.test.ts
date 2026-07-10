@@ -11,6 +11,7 @@ import {
   getSessionGroup,
   getSessionSummary,
   getSessionTitle,
+  isSubagentThread,
   reconcileSelection,
   selectGroupedSessions,
   selectOrderedSessions,
@@ -410,6 +411,16 @@ describe("session selectors", () => {
       lastChangedAt: at,
     };
   }
+
+  it("identifies every App Server subagent source shape", () => {
+    expect(isSubagentThread(thread("parent-id", { parentThreadId: "root" }))).toBe(true);
+    expect(isSubagentThread(thread("thread-source", { threadSource: "subagent" }))).toBe(true);
+    expect(isSubagentThread(thread("session-source", { source: { subAgent: {} } }))).toBe(true);
+    expect(isSubagentThread(thread("legacy-source", { source: { subagent: {} } }))).toBe(true);
+    expect(isSubagentThread(thread("root", { source: "appServer", threadSource: "user" }))).toBe(
+      false,
+    );
+  });
 
   it("assigns groups with pinned and needs-input precedence", () => {
     const preferences = prefs({ pinnedThreadIds: ["pinned"] });

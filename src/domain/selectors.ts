@@ -1,4 +1,5 @@
 import type {
+  CodexThread,
   DashboardState,
   Preferences,
   SessionGroup,
@@ -15,6 +16,22 @@ export const SESSION_GROUP_ORDER: readonly SessionGroup[] = [
 
 function normalizedText(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
+}
+
+function normalizedSourceKind(value: string): string {
+  return value.toLowerCase().replace(/[_-]/gu, "");
+}
+
+export function isSubagentThread(thread: CodexThread): boolean {
+  if (thread.parentThreadId) return true;
+  if (thread.threadSource && normalizedSourceKind(thread.threadSource) === "subagent") return true;
+  if (typeof thread.source === "string") {
+    return normalizedSourceKind(thread.source) === "subagent";
+  }
+  if (thread.source === null || typeof thread.source !== "object" || Array.isArray(thread.source)) {
+    return false;
+  }
+  return Object.keys(thread.source).some((key) => normalizedSourceKind(key) === "subagent");
 }
 
 export function truncateSummary(value: string, maxLength = 100): string {

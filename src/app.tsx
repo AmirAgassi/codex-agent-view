@@ -12,6 +12,7 @@ import {
   createInitialDashboardState,
   dashboardReducer,
 } from "./domain/reducer.js";
+import { isSubagentThread } from "./domain/selectors.js";
 import type {
   CodexThread,
   PendingRequest,
@@ -89,7 +90,7 @@ function threadIsVisible(
   preferences: Preferences,
   registry: WorkspaceRegistry,
 ): boolean {
-  if (thread.parentThreadId) return false;
+  if (isSubagentThread(thread)) return false;
   if (options.allProjects) return true;
   if (preferences.pinnedThreadIds.includes(thread.id)) return true;
   if (thread.cwd && pathIsWithin(options.cwd, thread.cwd)) return true;
@@ -374,6 +375,15 @@ export function AgentViewApp({
       const threadId = typeof notification.params?.threadId === "string"
         ? notification.params.threadId
         : undefined;
+      const startedThread = notification.method === "thread/started" &&
+          typeof notification.params?.thread === "object" &&
+          notification.params.thread !== null
+        ? notification.params.thread as CodexThread
+        : undefined;
+      if (startedThread && isSubagentThread(startedThread)) {
+        removedThreadIds.current.add(startedThread.id);
+        return;
+      }
       if (threadId && (notification.method === "thread/archived" || notification.method === "thread/deleted")) {
         removedThreadIds.current.add(threadId);
         hydratedThreadIds.current.delete(threadId);
