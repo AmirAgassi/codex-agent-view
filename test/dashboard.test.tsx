@@ -1,11 +1,13 @@
 import { PassThrough } from "node:stream";
 
-import { render, type Instance } from "ink";
+import { render, renderToString, type Instance } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createSessionRecord } from "../src/domain/reducer.js";
 import { DEFAULT_PREFERENCES, type DashboardState } from "../src/domain/types.js";
 import { Dashboard } from "../src/ui/dashboard.js";
+import { buildDashboardModel } from "../src/ui/model.js";
+import { SessionList } from "../src/ui/session-list.js";
 
 const instances: Instance[] = [];
 
@@ -100,6 +102,30 @@ afterEach(async () => {
 });
 
 describe("Dashboard selection", () => {
+  it("renders a blank row between session sections", () => {
+    const dashboardState = state(["first", "second"]);
+    const model = buildDashboardModel(dashboardState, {
+      ...DEFAULT_PREFERENCES,
+      pinnedThreadIds: ["first"],
+      order: ["first", "second"],
+    });
+
+    const output = renderToString(
+      <SessionList
+        sections={model.sections}
+        items={model.items}
+        selectedId="first"
+        maxRows={12}
+        width={120}
+      />,
+    );
+    const lines = output.split("\n");
+    const completedHeading = lines.findIndex((line) => line.includes("Completed"));
+
+    expect(completedHeading).toBeGreaterThan(0);
+    expect(lines[completedHeading - 1]).toBe("");
+  });
+
   it("restores the attached row after an empty loading render", async () => {
     const firstAttach = vi.fn<(threadId: string) => void>();
     const first = mount(state(["first", "second", "third"]), undefined, firstAttach);

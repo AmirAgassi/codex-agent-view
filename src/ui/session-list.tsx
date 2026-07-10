@@ -16,6 +16,7 @@ interface SessionListProps {
 }
 
 type ListEntry =
+  | { type: "spacer"; key: string }
   | { type: "heading"; key: string; label: string; count: number }
   | { type: "session"; key: string; item: SessionListItem };
 
@@ -42,7 +43,10 @@ function visibleWindow(
 ): VisibleEntries {
   if (items.length === 0) return { before: 0, after: 0, entries: [] };
 
-  const entries: ListEntry[] = sections.flatMap((section) => [
+  const entries: ListEntry[] = sections.flatMap((section, index) => [
+    ...(index > 0
+      ? [{ type: "spacer" as const, key: `spacer:${section.id}` }]
+      : []),
     {
       type: "heading" as const,
       key: `heading:${section.id}`,
@@ -166,7 +170,9 @@ function SessionListComponent({
         <Text dimColor>  … {visible.before} earlier</Text>
       ) : null}
       {visible.entries.map((entry) =>
-        entry.type === "heading" ? (
+        entry.type === "spacer" ? (
+          <Box key={entry.key} height={1} />
+        ) : entry.type === "heading" ? (
           <Box key={entry.key} paddingLeft={1}>
             <Text bold dimColor>{entry.label}</Text>
             <Text dimColor> {entry.count}</Text>
