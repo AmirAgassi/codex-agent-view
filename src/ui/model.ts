@@ -19,6 +19,12 @@ const STATE_GROUPS: ReadonlyArray<{
   { id: "stale", label: "Stale" },
 ];
 
+function subagentIsRunning(record: SessionRecord): boolean {
+  return record.thread.status.type === "active" ||
+    record.activeTurnId !== undefined ||
+    record.turns.some((turn) => turn.status === "inProgress");
+}
+
 export function buildDashboardModel(
   state: DashboardState,
   preferences: Preferences,
@@ -33,7 +39,7 @@ export function buildDashboardModel(
   const rootIds = new Set(rootRecords.map((record) => record.thread.id));
   const subagentsByParentId: Record<string, SessionRecord[]> = {};
   for (const record of records) {
-    if (!isSubagentThread(record.thread)) continue;
+    if (!isSubagentThread(record.thread) || !subagentIsRunning(record)) continue;
     const parentId = subagentRootId(record.thread, threadsById);
     if (!parentId || !rootIds.has(parentId)) continue;
     (subagentsByParentId[parentId] ??= []).push(record);

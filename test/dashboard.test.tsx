@@ -148,6 +148,18 @@ describe("Dashboard selection", () => {
       threadSource: "subagent",
       turns: [],
     });
+    dashboardState.sessions.finishedChild = createSessionRecord({
+      id: "finishedChild",
+      parentThreadId: "first",
+      preview: "Finished audit",
+      cwd: "/repo",
+      createdAt: 102,
+      updatedAt: 102,
+      status: { type: "notLoaded" },
+      agentNickname: "Hidden",
+      threadSource: "subagent",
+      turns: [],
+    });
     const model = buildDashboardModel(dashboardState, DEFAULT_PREFERENCES);
     const output = renderToString(
       <SessionList
@@ -161,6 +173,7 @@ describe("Dashboard selection", () => {
     );
 
     expect(output).toContain("• Goodall");
+    expect(output).not.toContain("Hidden");
     expect(model.items.map((item) => item.id)).toEqual(["second", "first"]);
     expect(model.counts).toEqual({ needsInput: 0, working: 0, completed: 2, stale: 0 });
   });
