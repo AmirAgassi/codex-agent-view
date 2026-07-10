@@ -1,9 +1,8 @@
 import React, { memo, useMemo } from "react";
 import { Box, Text } from "ink";
 import {
-  slashCommandSuggestions,
+  type PromptSuggestion,
   type TextRange,
-  validSlashCommandRanges,
 } from "./slash-commands.js";
 
 export type ComposerMode = "new" | "reply" | "answer" | "rename";
@@ -18,6 +17,9 @@ interface ComposerProps {
   questionLabel?: string;
   secret?: boolean;
   disabled?: boolean;
+  suggestions?: readonly PromptSuggestion[];
+  selectedSuggestionIndex?: number;
+  tokenRanges?: readonly TextRange[];
 }
 
 interface VisibleInput {
@@ -66,7 +68,7 @@ function placeholder(
   targetName: string | undefined,
   questionLabel: string | undefined,
 ): string {
-  if (!active) return "type a task · / for commands · space to reply";
+  if (!active) return "type a task · / commands · $ skills · space reply";
   if (mode === "reply") return `reply to ${targetName ?? "selected session"}`;
   if (mode === "answer") return questionLabel ?? "answer the question";
   if (mode === "rename") return `rename ${targetName ?? "selected session"}`;
@@ -83,6 +85,9 @@ function ComposerComponent({
   questionLabel,
   secret = false,
   disabled = false,
+  suggestions = [],
+  selectedSuggestionIndex = 0,
+  tokenRanges = [],
 }: ComposerProps): React.JSX.Element {
   const prompt = mode === "reply" ? "↳" : mode === "answer" ? "?" : mode === "rename" ? "✎" : "›";
   const renderedValue = secret ? "•".repeat(Array.from(value).length) : value;
@@ -91,15 +96,7 @@ function ComposerComponent({
     [renderedValue, cursor, width],
   );
   const hint = placeholder(active, mode, targetName, questionLabel);
-  const commandRanges = useMemo(
-    () => mode === "new" ? validSlashCommandRanges(renderedValue) : [],
-    [mode, renderedValue],
-  );
-  const commandSuggestions = useMemo(
-    () => active && mode === "new" ? slashCommandSuggestions(value, cursor) : [],
-    [active, cursor, mode, value],
-  );
-  const cursorHighlighted = commandRanges.some(
+  const cursorHighlighted = tokenRanges.some(
     (range) => visible.cursorIndex >= range.start && visible.cursorIndex < range.end,
   );
 
@@ -121,11 +118,11 @@ function ComposerComponent({
         {active && value.length > 0 ? (
           <Text wrap="truncate-end">
             {visible.hiddenBefore ? "…" : ""}
-            {highlightedText(visible.before, visible.start, commandRanges)}
+            {highlightedText(visible.before, visible.start, tokenRanges)}
             <Text inverse color={cursorHighlighted ? "cyan" : undefined} bold={cursorHighlighted}>
               {visible.cursor}
             </Text>
-            {highlightedText(visible.after, visible.cursorIndex + 1, commandRanges)}
+            {highlightedText(visible.after, visible.cursorIndex + 1, tokenRanges)}
             {visible.hiddenAfter ? "…" : ""}
           </Text>
         ) : active ? (
@@ -138,12 +135,22 @@ function ComposerComponent({
         )}
         {disabled ? <Text color="yellow"> busy</Text> : null}
       </Box>
-      {commandSuggestions.length > 0 ? (
-        <Box paddingLeft={2}>
-          <Text dimColor>tab complete · </Text>
-          <Text color="cyan">
-            {commandSuggestions.map((command) => `/${command.name}`).join("  ")}
-          </Text>
+      {suggestions.length > 0 ? (
+        <Box flexDirection="column" paddingLeft={2}>
+          {suggestions.map((suggestion, index) => {
+            const selected = index === Math.min(selectedSuggestionIndex, suggestions.length - 1);
+            return (
+              <Box key={`${suggestion.kind}:${suggestion.value}`}>
+                <Box width={24} flexShrink={0}>
+                  <Text color={selected ? "cyan" : undefined} bold={selected}>
+                    {selected ? "› " : "  "}{suggestion.value}
+                  </Text>
+                </Box>
+                <Text dimColor wrap="truncate-end">{suggestion.description}</Text>
+              </Box>
+            );
+          })}
+          <Text dimColor>↑/↓ choose · tab complete</Text>
         </Box>
       ) : null}
     </Box>

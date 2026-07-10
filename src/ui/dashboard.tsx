@@ -10,7 +10,12 @@ import { buildDashboardModel } from "./model.js";
 import { PeekPanel } from "./peek-panel.js";
 import { RequestPanel } from "./request-panel.js";
 import { SessionList } from "./session-list.js";
-import { completeSlashCommand, isLeadingSlashCommand } from "./slash-commands.js";
+import {
+  completePromptToken,
+  isLeadingSlashCommand,
+  promptSuggestions,
+  validPromptTokenRanges,
+} from "./slash-commands.js";
 import {
   isApprovalRequest,
   parseQuestions,
@@ -108,6 +113,7 @@ export function Dashboard({
   cwd,
   statusMessage,
   isBusy = false,
+  skills = [],
   onDispatch,
   onSteer,
   onResolveRequest,
@@ -133,7 +139,11 @@ export function Dashboard({
   const [peekedId, setPeekedId] = useState<string>();
   const [helpVisible, setHelpVisible] = useState(false);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
+  const [completionIndex, setCompletionIndex] = useState(0);
   const [answerFlow, setAnswerFlow] = useState<AnswerFlow>();
+  const navigationRepeat = useRef<
+    { direction: -1 | 1; at: number; carry: number } | undefined
+  >(undefined);
 
   const currentItemIds = useMemo(
     () => dashboardModel.items.map((item) => item.id),
@@ -157,6 +167,16 @@ export function Dashboard({
   const listRows = Math.max(3, terminalHeight - chromeRows - detailRows);
   const displayCwd =
     cwd ?? preferences.defaultCwd ?? selected?.thread.cwd ?? process.cwd();
+  const composerSuggestions = useMemo(
+    () => composer.active && composer.mode === "new"
+      ? promptSuggestions(composer.value, composer.cursor, skills)
+      : [],
+    [composer.active, composer.cursor, composer.mode, composer.value, skills],
+  );
+  const composerTokenRanges = useMemo(
+    () => composer.mode === "new" ? validPromptTokenRanges(composer.value, skills) : [],
+    [composer.mode, composer.value, skills],
+  );
 
   useEffect(() => {
     if (currentItemIds.length === 0) return;
@@ -192,8 +212,22 @@ export function Dashboard({
     onReorder?.(orderedIds);
   };
 
+  const acceleratedNavigationOffset = (direction: -1 | 1): number => {
+    const now = Date.now();
+    const previous = navigationRepeat.current;
+    if (!previous || previous.direction !== direction || now - previous.at > 250) {
+      navigationRepeat.current = { direction, at: now, carry: 0.5 };
+      return direction;
+    }
+    const carry = previous.carry + 0.5;
+    const step = 1 + Math.floor(carry);
+    navigationRepeat.current = { direction, at: now, carry: carry % 1 };
+    return direction * step;
+  };
+
   const closeComposer = (): void => {
     setComposer(EMPTY_COMPOSER);
+    setCompletionIndex(0);
     setAnswerFlow(undefined);
   };
 
@@ -212,6 +246,7 @@ export function Dashboard({
       cursor: Array.from(initialValue).length,
       targetId,
     });
+    setCompletionIndex(0);
     setAnswerFlow(flow);
   };
 
@@ -302,9 +337,25 @@ export function Dashboard({
       }
       if (key.tab && composer.mode === "new") {
         setComposer((current) => {
-          const completed = completeSlashCommand(current.value, current.cursor);
+          const completed = completePromptToken(
+            current.value,
+            current.cursor,
+            skills,
+            completionIndex,
+          );
           return completed ? { ...current, ...completed } : current;
         });
+        setCompletionIndex(0);
+        return;
+      }
+      if (composerSuggestions.length > 0 && (key.downArrow || (key.ctrl && input === "n"))) {
+        setCompletionIndex((current) => (current + 1) % composerSuggestions.length);
+        return;
+      }
+      if (composerSuggestions.length > 0 && (key.upArrow || (key.ctrl && input === "p"))) {
+        setCompletionIndex((current) =>
+          (current - 1 + composerSuggestions.length) % composerSuggestions.length
+        );
         return;
       }
       if (
@@ -335,14 +386,17 @@ export function Dashboard({
         return;
       }
       if (key.backspace && (key.ctrl || key.meta)) {
+        setCompletionIndex(0);
         setComposer(deleteWordBackward);
         return;
       }
       if (key.backspace) {
+        setCompletionIndex(0);
         setComposer(deleteBackward);
         return;
       }
       if (key.delete) {
+        setCompletionIndex(0);
         setComposer(deleteForward);
         return;
       }
@@ -355,6 +409,7 @@ export function Dashboard({
         return;
       }
       if (input && !key.ctrl && !key.meta && !key.super) {
+        setCompletionIndex(0);
         setComposer((current) => insertText(current, input));
       }
       return;
@@ -373,11 +428,11 @@ export function Dashboard({
       return;
     }
     if (key.downArrow) {
-      chooseIndex(selectedIndex + 1);
+      chooseIndex(selectedIndex + acceleratedNavigationOffset(1));
       return;
     }
     if (key.upArrow) {
-      chooseIndex(selectedIndex - 1);
+      chooseIndex(selectedIndex + acceleratedNavigationOffset(-1));
       return;
     }
     if (key.pageDown) {
@@ -432,11 +487,11 @@ export function Dashboard({
       beginComposer("rename", selectedId, undefined, sessionName(selected));
       return;
     }
-    if (actionModifier && input === "z" && selectedId) {
+    if (key.ctrl && input === "x" && selectedId) {
       onArchive?.(selectedId);
       return;
     }
-    if (actionModifier && input === "x" && selectedId) {
+    if (((key.ctrl && input === "t") || (key.meta && input === "x")) && selectedId) {
       onInterrupt?.(selectedId);
       return;
     }
@@ -530,6 +585,9 @@ export function Dashboard({
         questionLabel={currentQuestion?.question}
         secret={composer.mode === "answer" && currentQuestion?.isSecret === true}
         disabled={isBusy}
+        suggestions={composerSuggestions}
+        selectedSuggestionIndex={completionIndex}
+        tokenRanges={composerTokenRanges}
       />
       <Footer
         connection={state.connection}

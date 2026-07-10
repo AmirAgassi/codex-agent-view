@@ -1,5 +1,6 @@
 export { Dashboard } from "./dashboard.js";
 export { buildDashboardModel } from "./model.js";
+export type { SkillDefinition } from "./slash-commands.js";
 export type {
   ApprovalDecision,
   DashboardCounts,

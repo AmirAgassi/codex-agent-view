@@ -3,12 +3,23 @@ export interface SlashCommandDefinition {
   description: string;
 }
 
+export interface SkillDefinition {
+  name: string;
+  description: string;
+}
+
+export interface PromptSuggestion {
+  value: string;
+  description: string;
+  kind: "command" | "skill";
+}
+
 export interface TextRange {
   start: number;
   end: number;
 }
 
-interface SlashToken extends TextRange {
+interface PromptToken extends TextRange {
   query: string;
 }
 
@@ -69,18 +80,38 @@ export const SLASH_COMMANDS: readonly SlashCommandDefinition[] = [
 
 const COMMAND_NAMES = new Set(SLASH_COMMANDS.map((command) => command.name));
 const COMMAND_CHARACTER = /^[a-z-]$/iu;
+const SKILL_CHARACTER = /^[a-z0-9:_-]$/iu;
 
-function tokenAtCursor(value: string, cursor: number): SlashToken | undefined {
+function fuzzyScore(value: string, query: string): number | undefined {
+  if (query.length === 0) return 0;
+  const candidate = value.toLowerCase();
+  let previous = -1;
+  let score = candidate.startsWith(query) ? -100 : 0;
+  for (const character of query) {
+    const index = candidate.indexOf(character, previous + 1);
+    if (index < 0) return undefined;
+    score += index - previous;
+    previous = index;
+  }
+  return score;
+}
+
+function tokenAtCursor(
+  value: string,
+  cursor: number,
+  sigil: "/" | "$",
+  validCharacter: RegExp,
+): PromptToken | undefined {
   const characters = Array.from(value);
   let nameStart = cursor;
-  while (nameStart > 0 && COMMAND_CHARACTER.test(characters[nameStart - 1] ?? "")) {
+  while (nameStart > 0 && validCharacter.test(characters[nameStart - 1] ?? "")) {
     nameStart -= 1;
   }
   const start = nameStart - 1;
-  if (start < 0 || characters[start] !== "/") return undefined;
+  if (start < 0 || characters[start] !== sigil) return undefined;
   if (start > 0 && !/\s/u.test(characters[start - 1] ?? "")) return undefined;
   let end = cursor;
-  while (end < characters.length && COMMAND_CHARACTER.test(characters[end] ?? "")) end += 1;
+  while (end < characters.length && validCharacter.test(characters[end] ?? "")) end += 1;
   return {
     start,
     end,
@@ -92,7 +123,7 @@ export function slashCommandSuggestions(
   value: string,
   cursor: number,
 ): readonly SlashCommandDefinition[] {
-  const token = tokenAtCursor(value, cursor);
+  const token = tokenAtCursor(value, cursor, "/", COMMAND_CHARACTER);
   if (!token) return [];
   return SLASH_COMMANDS.filter((command) => command.name.startsWith(token.query)).slice(0, 5);
 }
@@ -101,11 +132,69 @@ export function completeSlashCommand(
   value: string,
   cursor: number,
 ): { value: string; cursor: number } | undefined {
-  const token = tokenAtCursor(value, cursor);
+  const token = tokenAtCursor(value, cursor, "/", COMMAND_CHARACTER);
   const suggestion = slashCommandSuggestions(value, cursor)[0];
   if (!token || !suggestion) return undefined;
   const characters = Array.from(value);
   const replacement = Array.from(`/${suggestion.name}`);
+  characters.splice(token.start, token.end - token.start, ...replacement);
+  return {
+    value: characters.join(""),
+    cursor: token.start + replacement.length,
+  };
+}
+
+export function promptSuggestions(
+  value: string,
+  cursor: number,
+  skills: readonly SkillDefinition[],
+): PromptSuggestion[] {
+  const slashToken = tokenAtCursor(value, cursor, "/", COMMAND_CHARACTER);
+  if (slashToken) {
+    return SLASH_COMMANDS
+      .filter((command) => command.name.startsWith(slashToken.query))
+      .slice(0, 5)
+      .map((command) => ({
+        value: `/${command.name}`,
+        description: command.description,
+        kind: "command" as const,
+      }));
+  }
+
+  const skillToken = tokenAtCursor(value, cursor, "$", SKILL_CHARACTER);
+  if (!skillToken) return [];
+  return skills
+    .map((skill, index) => ({
+      skill,
+      index,
+      score: fuzzyScore(skill.name, skillToken.query) ??
+        fuzzyScore(skill.description, skillToken.query),
+    }))
+    .filter((match): match is typeof match & { score: number } => match.score !== undefined)
+    .sort((left, right) => left.score - right.score || left.index - right.index)
+    .slice(0, 5)
+    .map(({ skill }) => ({
+      value: `$${skill.name}`,
+      description: skill.description,
+      kind: "skill" as const,
+    }));
+}
+
+export function completePromptToken(
+  value: string,
+  cursor: number,
+  skills: readonly SkillDefinition[],
+  selectedIndex: number,
+): { value: string; cursor: number } | undefined {
+  const slashToken = tokenAtCursor(value, cursor, "/", COMMAND_CHARACTER);
+  const skillToken = tokenAtCursor(value, cursor, "$", SKILL_CHARACTER);
+  const token = slashToken ?? skillToken;
+  const suggestions = promptSuggestions(value, cursor, skills);
+  if (!token || suggestions.length === 0) return undefined;
+  const suggestion = suggestions[Math.max(0, Math.min(selectedIndex, suggestions.length - 1))];
+  if (!suggestion) return undefined;
+  const characters = Array.from(value);
+  const replacement = Array.from(suggestion.value);
   characters.splice(token.start, token.end - token.start, ...replacement);
   return {
     value: characters.join(""),
@@ -123,6 +212,25 @@ export function validSlashCommandRanges(value: string): TextRange[] {
     while (end < characters.length && COMMAND_CHARACTER.test(characters[end] ?? "")) end += 1;
     const name = characters.slice(start + 1, end).join("").toLowerCase();
     if (COMMAND_NAMES.has(name)) ranges.push({ start, end });
+    start = end - 1;
+  }
+  return ranges;
+}
+
+export function validPromptTokenRanges(
+  value: string,
+  skills: readonly SkillDefinition[],
+): TextRange[] {
+  const ranges = validSlashCommandRanges(value);
+  const skillNames = new Set(skills.map((skill) => skill.name.toLowerCase()));
+  const characters = Array.from(value);
+  for (let start = 0; start < characters.length; start += 1) {
+    if (characters[start] !== "$") continue;
+    if (start > 0 && !/\s/u.test(characters[start - 1] ?? "")) continue;
+    let end = start + 1;
+    while (end < characters.length && SKILL_CHARACTER.test(characters[end] ?? "")) end += 1;
+    const name = characters.slice(start + 1, end).join("").toLowerCase();
+    if (skillNames.has(name)) ranges.push({ start, end });
     start = end - 1;
   }
   return ranges;

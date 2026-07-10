@@ -4,6 +4,7 @@ import type {
   Preferences,
   SessionRecord,
 } from "../domain/types.js";
+import type { SkillDefinition } from "./slash-commands.js";
 
 export type ApprovalDecision =
   | "accept"
@@ -34,6 +35,7 @@ export interface DashboardProps {
   cwd?: string;
   statusMessage?: DashboardStatusMessage | string;
   isBusy?: boolean;
+  skills?: readonly SkillDefinition[];
   onDispatch?: (prompt: string, cwd?: string) => void | Promise<string | undefined>;
   onSteer?: (threadId: string, prompt: string) => void;
   onResolveRequest?: (

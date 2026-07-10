@@ -72,19 +72,20 @@ This grants Codex full access to your machine. Use it only in an environment you
 | Key | Action |
 |---|---|
 | Type | Draft and dispatch a new task |
-| `↑` / `↓` | Move between sessions |
+| `↑` / `↓` | Move between sessions; holding accelerates to 1.5× |
 | `Shift+↑` / `Shift+↓` | Reorder the selected session within its section |
 | `←` / `→` / `Enter` | Open the session in the native Codex TUI when the draft is empty |
 | `/`, then `Tab` | Type, highlight, and complete Codex slash commands; submitting a leading command opens it in the selected native chat |
+| `$`, then `Tab` | Filter installed Codex skills, choose with `↑` / `↓`, and insert the selected skill |
 | `Shift+←` / `Ctrl+B` | Detach from the native chat and return (used inside Codex) |
 | `Space` | Reply or answer a pending question |
 | `Ctrl+Backspace` / `Option+Backspace` | Delete the previous word while typing |
 | `Ctrl+V` | Peek at recent activity |
 | `Ctrl+A` / `Ctrl+S` | Allow once / allow for the session |
 | `Ctrl+D` / `Ctrl+K` | Decline / cancel a request |
-| `Ctrl+X` | Interrupt the active turn |
+| `Ctrl+X` | Remove the selected chat from the view by archiving it |
+| `Ctrl+T` | Interrupt the active turn |
 | `Ctrl+E` | Rename the session |
-| `Ctrl+Z` | Archive the session |
 | `Ctrl+P` | Pin or unpin the session |
 | `Ctrl+O` | Open the session in native Codex |
 | `Ctrl+R` | Refresh |

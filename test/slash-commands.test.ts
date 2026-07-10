@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   completeSlashCommand,
+  completePromptToken,
   isLeadingSlashCommand,
   slashCommandSuggestions,
+  promptSuggestions,
+  validPromptTokenRanges,
   validSlashCommandRanges,
 } from "../src/ui/slash-commands.js";
 
@@ -29,5 +32,22 @@ describe("slash command composer support", () => {
     expect(isLeadingSlashCommand("  /review staged changes")).toBe(true);
     expect(isLeadingSlashCommand("please /review this")).toBe(false);
     expect(isLeadingSlashCommand("/not-real")).toBe(false);
+  });
+
+  it("filters, completes, and recognizes installed skills", () => {
+    const skills = [
+      { name: "data-quality", description: "check data" },
+      { name: "dashboard", description: "build dashboard" },
+    ];
+
+    expect(promptSuggestions("use $dash", 9, skills).map((item) => item.value)).toEqual([
+      "$dashboard",
+    ]);
+    expect(promptSuggestions("use $dsh", 8, skills)[0]?.value).toBe("$dashboard");
+    expect(completePromptToken("use $dash", 9, skills, 0)).toEqual({
+      value: "use $dashboard",
+      cursor: 14,
+    });
+    expect(validPromptTokenRanges("use $dashboard", skills)).toEqual([{ start: 4, end: 14 }]);
   });
 });

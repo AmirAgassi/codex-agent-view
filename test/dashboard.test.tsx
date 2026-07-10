@@ -69,7 +69,10 @@ function mount(
   dashboardState: DashboardState,
   initialSelectedThreadId: string | undefined,
   onAttach: (threadId: string, initialInput?: string) => void,
-  props: Pick<DashboardProps, "onDispatch" | "onPinToggle" | "onReorder"> = {},
+  props: Pick<
+    DashboardProps,
+    "onArchive" | "onDispatch" | "onPinToggle" | "onReorder" | "skills"
+  > = {},
 ) {
   const stdin = inputStream();
   const stdout = outputStream();
@@ -78,7 +81,7 @@ function mount(
       state={nextState}
       preferences={{
         ...DEFAULT_PREFERENCES,
-        order: ["first", "second", "third"],
+        order: Object.keys(nextState.sessions),
       }}
       initialSelectedThreadId={initialSelectedThreadId}
       onAttach={onAttach}
@@ -200,6 +203,59 @@ describe("Dashboard selection", () => {
     await dashboard.instance.waitUntilRenderFlush();
 
     expect(onPinToggle).toHaveBeenCalledWith("first", true);
+  });
+
+  it("chooses and inserts installed skills from the dollar picker", async () => {
+    const onDispatch = vi.fn();
+    const dashboard = mount(state(["first"]), undefined, vi.fn(), {
+      onDispatch,
+      skills: [
+        { name: "data-quality", description: "check data quality" },
+        { name: "dashboard", description: "build a dashboard" },
+      ],
+    });
+    await dashboard.instance.waitUntilRenderFlush();
+
+    dashboard.stdin.write("$da");
+    await dashboard.instance.waitUntilRenderFlush();
+    dashboard.stdin.write("\u001b[B");
+    await dashboard.instance.waitUntilRenderFlush();
+    dashboard.stdin.write("\t");
+    await dashboard.instance.waitUntilRenderFlush();
+    dashboard.stdin.write("\r");
+    await dashboard.instance.waitUntilRenderFlush();
+
+    expect(onDispatch).toHaveBeenCalledWith("$dashboard", undefined);
+  });
+
+  it("removes the selected chat with ctrl+x", async () => {
+    const onArchive = vi.fn();
+    const dashboard = mount(state(["first"]), undefined, vi.fn(), { onArchive });
+    await dashboard.instance.waitUntilRenderFlush();
+
+    dashboard.stdin.write("\u0018");
+    await dashboard.instance.waitUntilRenderFlush();
+
+    expect(onArchive).toHaveBeenCalledWith("first");
+  });
+
+  it("accelerates rapid repeated arrow navigation to one and a half speed", async () => {
+    const onAttach = vi.fn();
+    const dashboard = mount(
+      state(["first", "second", "third", "fourth", "fifth"]),
+      "first",
+      onAttach,
+    );
+    await dashboard.instance.waitUntilRenderFlush();
+
+    dashboard.stdin.write("\u001b[B");
+    await dashboard.instance.waitUntilRenderFlush();
+    dashboard.stdin.write("\u001b[B");
+    await dashboard.instance.waitUntilRenderFlush();
+    dashboard.stdin.write("\r");
+    await dashboard.instance.waitUntilRenderFlush();
+
+    expect(onAttach).toHaveBeenCalledWith("fourth");
   });
 
   it("opens the selected chat with left arrow while the draft is empty", async () => {

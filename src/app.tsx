@@ -33,6 +33,7 @@ import {
   Dashboard,
   type DashboardStatusMessage,
   type RequestResolution,
+  type SkillDefinition,
 } from "./ui/index.js";
 
 const ROOT_SOURCE_KINDS: NonNullable<ThreadListParams["sourceKinds"]> = [
@@ -56,6 +57,18 @@ export interface AgentViewAppProps {
 }
 
 const PREWARM_SESSION_LIMIT = 3;
+
+interface SkillsListResponse {
+  data: Array<{
+    skills: Array<{
+      name: string;
+      description: string;
+      shortDescription?: string;
+      interface?: { shortDescription?: string };
+      enabled: boolean;
+    }>;
+  }>;
+}
 
 function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -136,6 +149,7 @@ export function AgentViewApp({
   const [statusMessage, setStatusMessage] = useState<DashboardStatusMessage>();
   const [isBusy, setIsBusy] = useState(false);
   const [modelLabel, setModelLabel] = useState(options.model ?? "configured model");
+  const [skills, setSkills] = useState<SkillDefinition[]>([]);
   const stateRef = useRef(state);
   const preferencesRef = useRef(preferences);
   const registryRef = useRef<WorkspaceRegistry>({ version: 1, registrations: {} });
@@ -165,6 +179,24 @@ export function AgentViewApp({
     activeOperation.current = undefined;
     setIsBusy(false);
   }, []);
+
+  const loadSkills = useCallback(async (): Promise<void> => {
+    const response = await client.request<SkillsListResponse>("skills/list", {
+      cwds: [options.cwd],
+    });
+    const byName = new Map<string, SkillDefinition>();
+    for (const entry of response.data) {
+      for (const skill of entry.skills) {
+        if (!skill.enabled || byName.has(skill.name)) continue;
+        byName.set(skill.name, {
+          name: skill.name,
+          description:
+            skill.interface?.shortDescription ?? skill.shortDescription ?? skill.description,
+        });
+      }
+    }
+    setSkills([...byName.values()]);
+  }, [client, options.cwd]);
 
   const finish = useCallback(
     (outcome: AppOutcome): void => {
@@ -336,6 +368,9 @@ export function AgentViewApp({
     reconnectLoopRef.current = reconnectLoop;
 
     const onNotification = (notification: RpcNotification): void => {
+      if (notification.method === "skills/changed") {
+        void loadSkills().catch(() => undefined);
+      }
       const threadId = typeof notification.params?.threadId === "string"
         ? notification.params.threadId
         : undefined;
@@ -403,7 +438,11 @@ export function AgentViewApp({
         const configPromise = client.request<{ config?: Record<string, unknown> }>(
           "config/read",
         );
-        const [refreshResult, configResult] = await Promise.allSettled([refresh(), configPromise]);
+        const [refreshResult, configResult] = await Promise.allSettled([
+          refresh(),
+          configPromise,
+          loadSkills(),
+        ]);
         if (refreshResult.status === "rejected" || !refreshResult.value) {
           reconnectLoop.start();
         }
@@ -442,7 +481,7 @@ export function AgentViewApp({
       }
       subscribedThreadIds.current.clear();
     };
-  }, [client, options.model, refresh]);
+  }, [client, loadSkills, options.model, refresh]);
 
   const handleDispatch = useCallback(
     async (prompt: string, requestedCwd?: string): Promise<string | undefined> => {
@@ -723,6 +762,7 @@ export function AgentViewApp({
       cwd={options.cwd}
       statusMessage={statusMessage}
       isBusy={isBusy}
+      skills={skills}
       onDispatch={handleDispatch}
       onSteer={(threadId, prompt) => void handleSteer(threadId, prompt)}
       onResolveRequest={(request, resolution) =>
